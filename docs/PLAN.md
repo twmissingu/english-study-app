@@ -1,4 +1,4 @@
-# PLAN: 晓华亲子英语 · 学习助手
+# PLAN: 英语学习助手
 
 ## 技术架构
 
@@ -128,7 +128,7 @@ english-study/
 ```html
 <body>
   <header>
-    <h1>晓华亲子英语 · 学习助手</h1>
+    <h1>英语学习助手</h1>
     <div id="stats"><!-- 学习统计 --></div>
   </header>
   <main>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""晓华亲子英语 · 学习助手 — 扫描素材目录 + 启动 HTTP 服务器"""
+"""英语学习助手 — 扫描素材目录 + 启动 HTTP 服务器"""
 
 import http.server
 import json

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-晓华亲子英语 · 学习助手 — a local web app that serves children's English learning materials (3,654 files across 6 levels, 72 weeks) as a structured SPA. Parent-operated, child watches. Supports iPad via LAN.
+英语学习助手 — a local web app that serves children's English learning materials (3,654 files across 6 levels, 72 weeks) as a structured SPA. Parent-operated, child watches. Supports iPad via LAN.
 
 ## Commands
 
