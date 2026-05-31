@@ -338,6 +338,23 @@ class UnifiedHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def handle(self):
+        """Catch BrokenPipeError / ConnectionResetError to suppress noisy tracebacks."""
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # Client disconnected mid-response — harmless, skip traceback
+
+    def handle_one_request(self):
+        """Catch TLS ClientHello sent to plain-HTTP server (silently reject)."""
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            raise  # Let handle() catch these
+        except (UnicodeDecodeError, ValueError):
+            # Malformed request (e.g. TLS ClientHello to HTTP port)
+            pass
+
     def translate_path(self, path):
         path = unquote(path)
         if path.startswith("/materials/"):
