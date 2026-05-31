@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+  <title>晓华亲子英语 · 学习助手</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="app-header">
+    <div class="header-left">
+      <button id="sidebar-toggle" class="icon-btn" aria-label="切换导航">☰</button>
+      <h1>晓华亲子英语 · 学习助手</h1>
+    </div>
+    <div id="stats" class="header-stats">
+      <span id="stat-days" class="stat-item">📚 已学 <strong>0</strong> 天</span>
+      <span id="stat-streak" class="stat-item">🔥 连续 <strong>0</strong> 天</span>
+    </div>
+  </header>
+
+  <main id="app-main">
+    <aside id="sidebar">
+      <div class="sidebar-section">
+        <label for="level-select">选择级别</label>
+        <select id="level-select"></select>
+      </div>
+      <div class="sidebar-section">
+        <label>选择周次</label>
+        <ul id="week-list" class="nav-list"></ul>
+      </div>
+      <div class="sidebar-section">
+        <label>选择天次</label>
+        <ul id="day-list" class="nav-list"></ul>
+      </div>
+    </aside>
+
+    <section id="content">
+      <div id="content-header">
+        <h2 id="current-title">请选择课程</h2>
+        <div id="week-progress"></div>
+      </div>
+
+      <div id="items-container">
+        <div class="empty-state">
+          <p>👋 请从左侧选择级别、周次和天次开始学习</p>
+        </div>
+      </div>
+
+      <div id="action-bar" class="hidden">
+        <button id="play-btn" class="primary-btn">▶ 开始今天</button>
+        <button id="checkin-btn" class="checkin-btn">✓ 今日完成</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="vendor/pdfjs/pdf.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
