@@ -253,6 +253,121 @@ class Navigation {
   }
 }
 
+// ==================== Zoom Helper ====================
+function setupZoom(viewer, img) {
+  let scale = 1, panX = 0, panY = 0;
+  let lastDist = 0, lastPanX = 0, lastPanY = 0;
+  let isPanning = false;
+
+  const applyTransform = () => {
+    img.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  };
+
+  const reset = () => {
+    scale = 1; panX = 0; panY = 0;
+    applyTransform();
+  };
+
+  // Mouse wheel zoom: Ctrl/Cmd + scroll to zoom, otherwise let page scroll
+  viewer.addEventListener("wheel", (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      scale = Math.min(Math.max(scale * delta, 0.5), 5);
+      if (scale <= 1) { panX = 0; panY = 0; }
+      applyTransform();
+    }
+  }, { passive: false });
+
+  // Touch pinch-to-zoom
+  const getTouchDist = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  let isScrolling = false;
+  const findScrollParent = (el) => {
+    let p = el.parentElement;
+    while (p && p !== document.body) {
+      if (p.scrollHeight > p.clientHeight) return p;
+      p = p.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  };
+  let scrollParent = null;
+
+  viewer.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+      lastDist = getTouchDist(e.touches);
+    } else if (e.touches.length === 1) {
+      if (scale > 1) {
+        isPanning = true;
+        lastPanX = e.touches[0].clientX;
+        lastPanY = e.touches[0].clientY;
+      } else {
+        isScrolling = true;
+        scrollParent = findScrollParent(viewer);
+        lastPanY = e.touches[0].clientY;
+      }
+    }
+  }, { passive: true });
+
+  viewer.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = getTouchDist(e.touches);
+      const delta = dist / lastDist;
+      scale = Math.min(Math.max(scale * delta, 0.5), 5);
+      lastDist = dist;
+      applyTransform();
+    } else if (e.touches.length === 1 && isPanning) {
+      e.preventDefault();
+      panX += e.touches[0].clientX - lastPanX;
+      panY += e.touches[0].clientY - lastPanY;
+      lastPanX = e.touches[0].clientX;
+      lastPanY = e.touches[0].clientY;
+      applyTransform();
+    } else if (e.touches.length === 1 && isScrolling) {
+      e.preventDefault();
+      const dy = lastPanY - e.touches[0].clientY;
+      scrollParent.scrollBy(0, dy);
+      lastPanY = e.touches[0].clientY;
+    }
+  }, { passive: false });
+
+  viewer.addEventListener("touchend", () => {
+    isPanning = false;
+    isScrolling = false;
+    if (scale <= 1) { panX = 0; panY = 0; scale = 1; applyTransform(); }
+  }, { passive: true });
+
+  // Mouse drag to pan (when zoomed)
+  viewer.addEventListener("mousedown", (e) => {
+    if (scale > 1) {
+      isPanning = true;
+      lastPanX = e.clientX;
+      lastPanY = e.clientY;
+      e.preventDefault();
+    }
+  });
+
+  viewer.addEventListener("mousemove", (e) => {
+    if (isPanning) {
+      panX += e.clientX - lastPanX;
+      panY += e.clientY - lastPanY;
+      lastPanX = e.clientX;
+      lastPanY = e.clientY;
+      applyTransform();
+    }
+  });
+
+  viewer.addEventListener("mouseup", () => { isPanning = false; });
+  viewer.addEventListener("mouseleave", () => { isPanning = false; });
+
+  return { reset, applyTransform };
+}
+
 // ==================== ContentRenderer ====================
 class ContentRenderer {
   constructor(dataManager, progressManager) {
@@ -424,99 +539,77 @@ class ContentRenderer {
       current = (i + files.length) % files.length;
       img.src = MATERIAL_BASE + encodeFilePath(files[current]);
       counter.textContent = `${current + 1} / ${files.length}`;
-      resetZoom();
+      inlineZoom.reset();
     };
 
     container.querySelector(".img-prev").addEventListener("click", () => show(current - 1));
     container.querySelector(".img-next").addEventListener("click", () => show(current + 1));
 
-    // --- Pinch-to-zoom & scroll-to-zoom ---
-    let scale = 1, panX = 0, panY = 0;
-    let lastDist = 0, lastPanX = 0, lastPanY = 0;
-    let isPanning = false;
+    // Inline zoom (reusable)
+    const inlineZoom = setupZoom(viewer, img);
+    container.querySelector(".img-reset").addEventListener("click", inlineZoom.reset);
 
-    const applyTransform = () => {
-      img.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    // --- Lightbox ---
+    img.style.cursor = "zoom-in";
+    img.addEventListener("click", () => {
+      this._openLightbox(files, current, show);
+    });
+  }
+
+  _openLightbox(files, startIndex, inlineShow) {
+    let current = startIndex;
+
+    const overlay = document.createElement("div");
+    overlay.className = "lightbox-overlay";
+    overlay.innerHTML = `
+      <button class="lightbox-close" title="关闭">✕</button>
+      <button class="lightbox-nav lightbox-prev">◀</button>
+      <div class="lightbox-content">
+        <img src="${MATERIAL_BASE}${encodeFilePath(files[current])}" draggable="false" />
+      </div>
+      <button class="lightbox-nav lightbox-next">▶</button>
+      <span class="lightbox-counter">${current + 1} / ${files.length}</span>`;
+
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    const lbImg = overlay.querySelector(".lightbox-content img");
+    const lbCounter = overlay.querySelector(".lightbox-counter");
+    const lbPrev = overlay.querySelector(".lightbox-prev");
+    const lbNext = overlay.querySelector(".lightbox-next");
+    const lbClose = overlay.querySelector(".lightbox-close");
+
+    const lbZoom = setupZoom(overlay.querySelector(".lightbox-content"), lbImg);
+
+    const showLb = (i) => {
+      current = (i + files.length) % files.length;
+      lbImg.src = MATERIAL_BASE + encodeFilePath(files[current]);
+      lbCounter.textContent = `${current + 1} / ${files.length}`;
+      lbZoom.reset();
+      // Sync inline viewer
+      inlineShow(current);
     };
 
-    const resetZoom = () => {
-      scale = 1; panX = 0; panY = 0;
-      applyTransform();
+    lbPrev.addEventListener("click", (e) => { e.stopPropagation(); showLb(current - 1); });
+    lbNext.addEventListener("click", (e) => { e.stopPropagation(); showLb(current + 1); });
+
+    const close = () => {
+      overlay.remove();
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", onKeydown);
     };
 
-    container.querySelector(".img-reset").addEventListener("click", resetZoom);
-
-    // Mouse wheel zoom
-    viewer.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      scale = Math.min(Math.max(scale * delta, 0.5), 5);
-      if (scale <= 1) { panX = 0; panY = 0; }
-      applyTransform();
-    }, { passive: false });
-
-    // Touch pinch-to-zoom
-    const getTouchDist = (touches) => {
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.hypot(dx, dy);
-    };
-
-    viewer.addEventListener("touchstart", (e) => {
-      if (e.touches.length === 2) {
-        lastDist = getTouchDist(e.touches);
-      } else if (e.touches.length === 1 && scale > 1) {
-        isPanning = true;
-        lastPanX = e.touches[0].clientX;
-        lastPanY = e.touches[0].clientY;
-      }
-    }, { passive: true });
-
-    viewer.addEventListener("touchmove", (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const dist = getTouchDist(e.touches);
-        const delta = dist / lastDist;
-        scale = Math.min(Math.max(scale * delta, 0.5), 5);
-        lastDist = dist;
-        applyTransform();
-      } else if (e.touches.length === 1 && isPanning) {
-        e.preventDefault();
-        panX += e.touches[0].clientX - lastPanX;
-        panY += e.touches[0].clientY - lastPanY;
-        lastPanX = e.touches[0].clientX;
-        lastPanY = e.touches[0].clientY;
-        applyTransform();
-      }
-    }, { passive: false });
-
-    viewer.addEventListener("touchend", () => {
-      isPanning = false;
-      if (scale <= 1) { panX = 0; panY = 0; scale = 1; applyTransform(); }
-    }, { passive: true });
-
-    // Mouse drag to pan (when zoomed)
-    viewer.addEventListener("mousedown", (e) => {
-      if (scale > 1) {
-        isPanning = true;
-        lastPanX = e.clientX;
-        lastPanY = e.clientY;
-        e.preventDefault();
-      }
+    lbClose.addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay || e.target === overlay.querySelector(".lightbox-content")) close();
     });
 
-    viewer.addEventListener("mousemove", (e) => {
-      if (isPanning) {
-        panX += e.clientX - lastPanX;
-        panY += e.clientY - lastPanY;
-        lastPanX = e.clientX;
-        lastPanY = e.clientY;
-        applyTransform();
-      }
-    });
-
-    viewer.addEventListener("mouseup", () => { isPanning = false; });
-    viewer.addEventListener("mouseleave", () => { isPanning = false; });
+    const onKeydown = (e) => {
+      if (e.key === "Escape") close();
+      if (e.key === "ArrowLeft") showLb(current - 1);
+      if (e.key === "ArrowRight") showLb(current + 1);
+    };
+    document.addEventListener("keydown", onKeydown);
   }
 
   renderAudio(container, item, idx) {
